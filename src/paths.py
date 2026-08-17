@@ -7,7 +7,7 @@ import shutil
 import sys
 from pathlib import Path
 
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.3.1"
 
 
 def app_root() -> Path:

@@ -124,9 +124,10 @@ rules: []
     cfg = load_config(dest)
     assert "confirm_yes" in cfg.points
     clicks = [a.get("point") for a in build_restart_actions(cfg) if a["action"] == "click"]
-    assert clicks == ["stop", "confirm_yes", "close", "launch_icon", "start"]
+    assert clicks == ["stop", "confirm_yes", "close", "confirm_yes", "launch_icon", "start"]
     waits = [a["sec"] for a in build_restart_actions(cfg) if a["action"] == "wait"]
     assert waits[0] == 1
+    assert waits[2] == 1
     assert waits[-1] == 18
 
 
@@ -170,11 +171,11 @@ rules: []
     assert True not in cfg.points
     assert cfg.points["confirm_yes"].x == 88
     clicks = [a.get("point") for a in build_restart_actions(cfg) if a["action"] == "click"]
-    assert clicks == ["stop", "confirm_yes", "close", "launch_icon", "start"]
+    assert clicks == ["stop", "confirm_yes", "close", "confirm_yes", "launch_icon", "start"]
 
 
-def test_packaged_version_is_0_3_0() -> None:
+def test_packaged_version_is_0_3_1() -> None:
     text = Path("config.yaml").read_text(encoding="utf-8")
-    assert 'version: "0.3.0"' in text
-    assert APP_VERSION == "0.3.0"
-    assert Path("VERSION").read_text(encoding="utf-8").strip() == "0.3.0"
+    assert 'version: "0.3.1"' in text
+    assert APP_VERSION == "0.3.1"
+    assert Path("VERSION").read_text(encoding="utf-8").strip() == "0.3.1"

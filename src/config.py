@@ -164,7 +164,8 @@ def _parse_config(raw: dict[str, Any]) -> AppConfig:
             points["confirm_yes"] = Point(x=880, y=560, click="single")
 
     sequences = _normalize_sequences(recovery_raw.get("sequences") or {})
-    sequences = _ensure_yes_confirm_step(sequences)
+    sequences = _ensure_confirm_after(sequences, "stop")
+    sequences = _ensure_confirm_after(sequences, "close")
     sequences = _bind_startup_wait(sequences)
 
     return AppConfig(
@@ -215,22 +216,37 @@ def _normalize_sequences(
     return normalized
 
 
-def _ensure_yes_confirm_step(
+def _ensure_confirm_after(
     sequences: dict[str, list[dict[str, Any]]],
+    after_point: str,
 ) -> dict[str, list[dict[str, Any]]]:
     steps = list(sequences.get("restart_app") or [])
     if not steps:
         return sequences
-    if any(step.get("point") == "confirm_yes" for step in steps):
+    after_idx = next(
+        (
+            index
+            for index, step in enumerate(steps)
+            if step.get("action") == "click" and step.get("point") == after_point
+        ),
+        None,
+    )
+    if after_idx is None:
         return sequences
-    inserted: list[dict[str, Any]] = []
-    added = False
-    for step in steps:
-        inserted.append(step)
-        if not added and step.get("action") == "click" and step.get("point") == "stop":
-            inserted.append({"action": "wait", "from": "stop_confirm_wait_sec"})
-            inserted.append({"action": "click", "point": "confirm_yes"})
-            added = True
+    next_click = next(
+        (
+            step.get("point")
+            for step in steps[after_idx + 1 :]
+            if step.get("action") == "click"
+        ),
+        None,
+    )
+    if next_click == "confirm_yes":
+        return sequences
+    inserted = steps[: after_idx + 1]
+    inserted.append({"action": "wait", "from": "stop_confirm_wait_sec"})
+    inserted.append({"action": "click", "point": "confirm_yes"})
+    inserted.extend(steps[after_idx + 1 :])
     sequences["restart_app"] = inserted
     return sequences
 

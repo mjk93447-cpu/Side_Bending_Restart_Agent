@@ -8,7 +8,7 @@ Windows 화면을 OCR로 감시하다가, 테이블 ROI에서 `NaN`이 임계값
 
 릴리즈: https://github.com/mjk93447-cpu/Side_Bending_Restart_Agent/releases
 
-1. `SideBendingRestartAgent-0.3.0-windows-x64.zip` 을 USB 등으로 보안 PC에 복사합니다.
+1. `SideBendingRestartAgent-0.3.1-windows-x64.zip` 을 USB 등으로 보안 PC에 복사합니다.
 2. 압축을 풉니다. 인터넷, Python, Tesseract 설치는 필요 없습니다.
 3. `RUN.bat` 또는 `SideBendingRestartAgent.exe` 를 실행합니다.
 4. **Calibrate** 로 ROI와 클릭 좌표를 저장합니다.
@@ -37,17 +37,17 @@ python -m src
 통팩을 다시 만들 때:
 
 ```bat
-powershell -ExecutionPolicy Bypass -File scripts\build_offline_pack.ps1 -Version 0.3.0
+powershell -ExecutionPolicy Bypass -File scripts\build_offline_pack.ps1 -Version 0.3.1
 ```
 
-산출물: `dist/SideBendingRestartAgent-0.3.0-windows-x64.zip`
+산출물: `dist/SideBendingRestartAgent-0.3.1-windows-x64.zip`
 
 ## 동작
 
 1. 화면을 주기적으로 캡처합니다.
 2. **table ROI**에서 `NaN` 토큰 수를 셉니다.
 3. 기본 임계값 **21개** 이상이 **연속 2회**이면 freeze로 판정합니다.
-4. STOP → **1초 대기** → 중앙 팝업 **Yes** → 종료(X) → 아이콘 더블클릭 → **기동 대기**(기본 10초, 설정에서 변경) → START.
+4. STOP → **1초 대기** → 중앙 팝업 **Yes** → 종료(X) → **1초 대기** → 다시 **Yes** → 아이콘 더블클릭 → **기동 대기**(기본 10초, 설정에서 변경) → START.
 5. 쿨다운(기본 15초) 후 다시 감시합니다.
 
 ## 현장 캘리브레이션 (필수)
@@ -85,8 +85,8 @@ powershell -ExecutionPolicy Bypass -File scripts\build_offline_pack.ps1 -Version
 | `ocr.n0n_correction` | false | `N0N` 을 NaN으로 인정 |
 | `rois.table` | 하단 중앙 | OCR 영역 |
 | `recovery.startup_wait_sec` | 10 | 재실행 후 START 전 대기 (대시보드에서 변경) |
-| `recovery.stop_confirm_wait_sec` | 1 | STOP 후 Yes 팝업 대기 |
-| `points.confirm_yes` | 화면 중앙 근처 | STOP 확인 팝업 Yes |
+| `recovery.stop_confirm_wait_sec` | 1 | STOP/종료 확인 팝업 대기 |
+| `points.confirm_yes` | 화면 중앙 근처 | STOP·종료 확인 팝업 Yes |
 | `points.*` | STOP/Yes/X/아이콘/START | 클릭 좌표 |
 | `rules[].when.*.min` | 21 | NaN 개수 임계값 |
 

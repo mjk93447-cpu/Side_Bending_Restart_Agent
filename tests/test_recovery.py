@@ -13,10 +13,14 @@ def test_restart_app_action_order() -> None:
     assert kinds[2] == ("click", "confirm_yes", None)
     assert kinds[3][0] == "wait" and kinds[3][2] == 0.5
     assert kinds[4] == ("click", "close", None)
-    assert kinds[5][0] == "wait" and kinds[5][2] == 1.0
-    assert kinds[6] == ("click", "launch_icon", None)
-    assert kinds[7][0] == "wait" and kinds[7][2] == 10
-    assert kinds[8] == ("click", "start", None)
+    assert kinds[5][0] == "wait" and kinds[5][2] == 1
+    assert kinds[6] == ("click", "confirm_yes", None)
+    assert kinds[7][0] == "wait" and kinds[7][2] == 1.0
+    assert kinds[8] == ("click", "launch_icon", None)
+    assert kinds[9][0] == "wait" and kinds[9][2] == 10
+    assert kinds[10] == ("click", "start", None)
+    yes_clicks = [a for a in actions if a.get("point") == "confirm_yes"]
+    assert len(yes_clicks) == 2
 
 
 def test_startup_wait_follows_config() -> None:
@@ -38,8 +42,9 @@ def test_launch_icon_uses_double_click() -> None:
     actions = build_restart_actions(cfg)
     icon = next(a for a in actions if a.get("point") == "launch_icon")
     assert icon["click"] == "double"
-    yes = next(a for a in actions if a.get("point") == "confirm_yes")
-    assert yes["click"] == "single"
+    yes_clicks = [a for a in actions if a.get("point") == "confirm_yes"]
+    assert len(yes_clicks) == 2
+    assert all(a["click"] == "single" for a in yes_clicks)
 
 
 def test_dry_run_does_not_call_controller() -> None:
@@ -69,12 +74,16 @@ def test_dry_run_does_not_call_controller() -> None:
         "click",
         "wait",
         "click",
+        "wait",
+        "click",
     ]
     assert log[0]["point"] == "stop"
     assert log[2]["point"] == "confirm_yes"
-    assert log[6]["point"] == "launch_icon"
-    assert log[6]["click"] == "double"
-    assert log[7]["sec"] == 10
+    assert log[4]["point"] == "close"
+    assert log[6]["point"] == "confirm_yes"
+    assert log[8]["point"] == "launch_icon"
+    assert log[8]["click"] == "double"
+    assert log[9]["sec"] == 10
     assert log[-1]["point"] == "start"
 
 
@@ -99,6 +108,9 @@ def test_live_run_dispatches_clicks_and_waits() -> None:
     assert calls[2] == ("click", cfg.points["confirm_yes"].x, cfg.points["confirm_yes"].y)
     assert calls[3] == ("wait", 0.5)
     assert calls[4] == ("click", cfg.points["close"].x, cfg.points["close"].y)
+    assert calls[5] == ("wait", 1)
+    assert calls[6] == ("click", cfg.points["confirm_yes"].x, cfg.points["confirm_yes"].y)
+    assert calls[7] == ("wait", 1.0)
     assert ("double", cfg.points["launch_icon"].x, cfg.points["launch_icon"].y) in calls
     assert ("wait", 10) in calls
     assert calls[-1] == ("click", cfg.points["start"].x, cfg.points["start"].y)

@@ -1,4 +1,4 @@
-version: "0.3.0"
+version: "0.3.1"
 
 monitor:
   interval_sec: 2.0
@@ -59,6 +59,10 @@ recovery:
         sec: 0.5
       - action: click
         point: close
+      - action: wait
+        from: stop_confirm_wait_sec
+      - action: click
+        point: confirm_yes
       - action: wait
         sec: 1.0
       - action: click
