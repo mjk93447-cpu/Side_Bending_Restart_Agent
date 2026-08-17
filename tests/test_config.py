@@ -128,7 +128,8 @@ rules: []
     waits = [a["sec"] for a in build_restart_actions(cfg) if a["action"] == "wait"]
     assert waits[0] == 1
     assert waits[2] == 1
-    assert waits[-1] == 18
+    assert waits[-2] == 5
+    assert waits[-1] == 10
 
 
 def test_unquoted_yaml_yes_becomes_confirm_yes(tmp_path: Path) -> None:
@@ -174,8 +175,44 @@ rules: []
     assert clicks == ["stop", "confirm_yes", "close", "confirm_yes", "launch_icon", "start"]
 
 
-def test_packaged_version_is_0_3_1() -> None:
+def test_editor_managed_does_not_reinject_removed_yes(tmp_path: Path) -> None:
+    dest = tmp_path / "config.yaml"
+    dest.write_text(
+        """
+monitor: {interval_sec: 1, confirm_scans: 1, cooldown_sec: 1}
+ocr: {backend: auto, n0n_correction: false}
+control: {move_duration: 0.1, click_pause: 0.1, failsafe: true}
+rois:
+  table: {x: 1, y: 2, w: 3, h: 4}
+points:
+  stop: {x: 10, y: 10, click: single}
+  confirm_yes: {x: 88, y: 56, click: single}
+  close: {x: 20, y: 20, click: single}
+  launch_icon: {x: 30, y: 30, click: double}
+  start: {x: 40, y: 40, click: single}
+recovery:
+  editor_managed: true
+  sequences:
+    restart_app:
+      - {action: click, point: stop, enabled: true}
+      - {action: wait, sec: 0.5, enabled: true}
+      - {action: click, point: close, enabled: true}
+      - {action: click, point: launch_icon, enabled: true}
+      - {action: wait, sec: 10, enabled: true}
+      - {action: click, point: start, enabled: true}
+rules: []
+""",
+        encoding="utf-8",
+    )
+    from src.recovery import build_restart_actions
+
+    cfg = load_config(dest)
+    clicks = [a.get("point") for a in build_restart_actions(cfg) if a["action"] == "click"]
+    assert clicks == ["stop", "close", "launch_icon", "start"]
+
+
+def test_packaged_version_is_0_4_0() -> None:
     text = Path("config.yaml").read_text(encoding="utf-8")
-    assert 'version: "0.3.1"' in text
-    assert APP_VERSION == "0.3.1"
-    assert Path("VERSION").read_text(encoding="utf-8").strip() == "0.3.1"
+    assert 'version: "0.4.0"' in text
+    assert APP_VERSION == "0.4.0"
+    assert Path("VERSION").read_text(encoding="utf-8").strip() == "0.4.0"

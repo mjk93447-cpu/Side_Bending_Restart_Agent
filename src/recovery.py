@@ -17,6 +17,8 @@ def build_restart_actions(
     raw_steps = config.recovery.sequences.get(sequence_name) or []
     actions: list[dict[str, Any]] = []
     for step in raw_steps:
+        if step.get("enabled", True) is False:
+            continue
         action = dict(step)
         if action.get("action") == "wait":
             source = action.get("from")

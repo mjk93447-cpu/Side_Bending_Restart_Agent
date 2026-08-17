@@ -15,7 +15,7 @@ def test_restart_app_action_order() -> None:
     assert kinds[4] == ("click", "close", None)
     assert kinds[5][0] == "wait" and kinds[5][2] == 1
     assert kinds[6] == ("click", "confirm_yes", None)
-    assert kinds[7][0] == "wait" and kinds[7][2] == 1.0
+    assert kinds[7][0] == "wait" and kinds[7][2] == 5
     assert kinds[8] == ("click", "launch_icon", None)
     assert kinds[9][0] == "wait" and kinds[9][2] == 10
     assert kinds[10] == ("click", "start", None)
@@ -23,9 +23,13 @@ def test_restart_app_action_order() -> None:
     assert len(yes_clicks) == 2
 
 
-def test_startup_wait_follows_config() -> None:
+def test_wait_after_icon_uses_step_seconds() -> None:
     cfg = load_config()
-    cfg.recovery.startup_wait_sec = 25
+    steps = cfg.recovery.sequences["restart_app"]
+    for index, step in enumerate(steps):
+        if step.get("point") == "launch_icon" and index + 1 < len(steps):
+            steps[index + 1]["sec"] = 25
+            break
     actions = build_restart_actions(cfg)
     wait_after_icon = None
     for index, action in enumerate(actions):
@@ -81,6 +85,7 @@ def test_dry_run_does_not_call_controller() -> None:
     assert log[2]["point"] == "confirm_yes"
     assert log[4]["point"] == "close"
     assert log[6]["point"] == "confirm_yes"
+    assert log[7]["sec"] == 5
     assert log[8]["point"] == "launch_icon"
     assert log[8]["click"] == "double"
     assert log[9]["sec"] == 10
@@ -110,7 +115,18 @@ def test_live_run_dispatches_clicks_and_waits() -> None:
     assert calls[4] == ("click", cfg.points["close"].x, cfg.points["close"].y)
     assert calls[5] == ("wait", 1)
     assert calls[6] == ("click", cfg.points["confirm_yes"].x, cfg.points["confirm_yes"].y)
-    assert calls[7] == ("wait", 1.0)
+    assert calls[7] == ("wait", 5)
     assert ("double", cfg.points["launch_icon"].x, cfg.points["launch_icon"].y) in calls
     assert ("wait", 10) in calls
     assert calls[-1] == ("click", cfg.points["start"].x, cfg.points["start"].y)
+
+
+def test_disabled_steps_are_skipped() -> None:
+    cfg = load_config()
+    steps = cfg.recovery.sequences["restart_app"]
+    for step in steps:
+        if step.get("point") == "start":
+            step["enabled"] = False
+    actions = build_restart_actions(cfg)
+    assert actions[-1].get("point") != "start"
+    assert any(a.get("point") == "launch_icon" for a in actions)

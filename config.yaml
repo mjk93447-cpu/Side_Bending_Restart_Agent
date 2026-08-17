@@ -1,4 +1,4 @@
-version: "0.3.1"
+version: "0.4.0"
 
 monitor:
   interval_sec: 2.0
@@ -47,30 +47,42 @@ points:
 recovery:
   startup_wait_sec: 10
   stop_confirm_wait_sec: 1
+  editor_managed: true
   sequences:
     restart_app:
       - action: click
         point: stop
+        enabled: true
       - action: wait
-        from: stop_confirm_wait_sec
+        sec: 1
+        enabled: true
       - action: click
         point: confirm_yes
+        enabled: true
       - action: wait
         sec: 0.5
+        enabled: true
       - action: click
         point: close
+        enabled: true
       - action: wait
-        from: stop_confirm_wait_sec
+        sec: 1
+        enabled: true
       - action: click
         point: confirm_yes
+        enabled: true
       - action: wait
-        sec: 1.0
+        sec: 5
+        enabled: true
       - action: click
         point: launch_icon
+        enabled: true
       - action: wait
-        from: startup_wait_sec
+        sec: 10
+        enabled: true
       - action: click
         point: start
+        enabled: true
 
 rules:
   - name: nan_table_freeze

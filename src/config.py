@@ -73,6 +73,7 @@ class Point:
 class RecoveryConfig:
     startup_wait_sec: float = 10.0
     stop_confirm_wait_sec: float = 1.0
+    editor_managed: bool = False
     sequences: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
 
@@ -102,6 +103,7 @@ class AppConfig:
             "recovery": {
                 "startup_wait_sec": self.recovery.startup_wait_sec,
                 "stop_confirm_wait_sec": self.recovery.stop_confirm_wait_sec,
+                "editor_managed": self.recovery.editor_managed,
                 "sequences": self.recovery.sequences,
             },
             "rules": self.rules,
@@ -164,9 +166,7 @@ def _parse_config(raw: dict[str, Any]) -> AppConfig:
             points["confirm_yes"] = Point(x=880, y=560, click="single")
 
     sequences = _normalize_sequences(recovery_raw.get("sequences") or {})
-    sequences = _ensure_confirm_after(sequences, "stop")
-    sequences = _ensure_confirm_after(sequences, "close")
-    sequences = _bind_startup_wait(sequences)
+    sequences = _migrate_sequence(sequences, recovery_raw)
 
     return AppConfig(
         monitor=MonitorConfig(
@@ -188,6 +188,7 @@ def _parse_config(raw: dict[str, Any]) -> AppConfig:
         recovery=RecoveryConfig(
             startup_wait_sec=float(recovery_raw.get("startup_wait_sec", 10)),
             stop_confirm_wait_sec=float(recovery_raw.get("stop_confirm_wait_sec", 1)),
+            editor_managed=bool(recovery_raw.get("editor_managed", False)),
             sequences=sequences,
         ),
         rules=list(raw.get("rules") or []),
@@ -251,20 +252,71 @@ def _ensure_confirm_after(
     return sequences
 
 
-def _bind_startup_wait(
+def _migrate_sequence(
+    sequences: dict[str, list[dict[str, Any]]],
+    recovery_raw: dict[str, Any],
+) -> dict[str, list[dict[str, Any]]]:
+    editor_managed = bool(recovery_raw.get("editor_managed", False))
+    if not editor_managed:
+        sequences = _ensure_confirm_after(sequences, "stop")
+        sequences = _ensure_confirm_after(sequences, "close")
+        sequences = _ensure_shutdown_wait(sequences)
+    sequences = _flatten_sequence_waits(sequences, recovery_raw)
+    return sequences
+
+
+def _flatten_sequence_waits(
+    sequences: dict[str, list[dict[str, Any]]],
+    recovery_raw: dict[str, Any],
+) -> dict[str, list[dict[str, Any]]]:
+    startup = float(recovery_raw.get("startup_wait_sec", 10))
+    confirm = float(recovery_raw.get("stop_confirm_wait_sec", 1))
+    steps = list(sequences.get("restart_app") or [])
+    flattened: list[dict[str, Any]] = []
+    for step in steps:
+        item = dict(step)
+        if item.get("action") == "wait":
+            source = item.get("from")
+            if source == "startup_wait_sec":
+                item["sec"] = startup
+            elif source == "stop_confirm_wait_sec":
+                item["sec"] = confirm
+            item.setdefault("sec", 1.0)
+            item["sec"] = float(item["sec"])
+            item.pop("from", None)
+        item.setdefault("enabled", True)
+        flattened.append(item)
+    if steps:
+        sequences["restart_app"] = flattened
+    return sequences
+
+
+def _ensure_shutdown_wait(
     sequences: dict[str, list[dict[str, Any]]],
 ) -> dict[str, list[dict[str, Any]]]:
     steps = list(sequences.get("restart_app") or [])
-    bound: list[dict[str, Any]] = []
-    after_icon = False
-    for step in steps:
-        item = dict(step)
-        if after_icon and item.get("action") == "wait":
-            item["from"] = "startup_wait_sec"
-            after_icon = False
-        if item.get("action") == "click" and item.get("point") == "launch_icon":
-            after_icon = True
-        bound.append(item)
-    if steps:
-        sequences["restart_app"] = bound
+    icon_idx = next(
+        (
+            index
+            for index, step in enumerate(steps)
+            if step.get("action") == "click" and step.get("point") == "launch_icon"
+        ),
+        None,
+    )
+    if icon_idx is None:
+        return sequences
+    if icon_idx > 0 and steps[icon_idx - 1].get("action") == "wait":
+        prev = steps[icon_idx - 1]
+        sec = prev.get("sec")
+        source = prev.get("from")
+        if source == "startup_wait_sec":
+            return sequences
+        if sec in (1, 1.0) or source == "stop_confirm_wait_sec":
+            prev = dict(prev)
+            prev["sec"] = 5
+            prev.pop("from", None)
+            steps[icon_idx - 1] = prev
+    else:
+        steps.insert(icon_idx, {"action": "wait", "sec": 5, "enabled": True})
+    sequences["restart_app"] = steps
     return sequences

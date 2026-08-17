@@ -18,6 +18,7 @@ from src.events import EventLog
 from src.monitor import Monitor, MonitorTick
 from src.ocr_engine import OCREngine
 from src.paths import APP_VERSION, app_root, logs_dir
+from src.process_editor import ProcessEditorPanel
 from src.recovery import build_restart_actions, run_sequence
 
 
@@ -54,11 +55,10 @@ class Dashboard:
 
         self.root = tk.Tk()
         self.root.title(f"NaN Freeze Restart Agent v{APP_VERSION}")
-        self.root.geometry("820x640")
+        self.root.geometry("960x720")
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
         self.dry_run = tk.BooleanVar(value=False)
-        self.startup_wait = tk.DoubleVar(value=float(self.config.recovery.startup_wait_sec))
         self.status = tk.StringVar(value="Idle")
         self.count_text = tk.StringVar(value="NaN: -")
         self.confirm_text = tk.StringVar(value="Confirm: 0")
@@ -77,19 +77,6 @@ class Dashboard:
             side="left", padx=4
         )
         ttk.Checkbutton(top, text="Dry-run clicks", variable=self.dry_run).pack(side="left", padx=8)
-        ttk.Label(top, text="Startup wait (sec)").pack(side="left", padx=(16, 4))
-        wait_spin = ttk.Spinbox(
-            top,
-            from_=1,
-            to=180,
-            increment=1,
-            textvariable=self.startup_wait,
-            width=6,
-            command=self._save_startup_wait,
-        )
-        wait_spin.pack(side="left")
-        wait_spin.bind("<Return>", lambda _e: self._save_startup_wait())
-        wait_spin.bind("<FocusOut>", lambda _e: self._save_startup_wait())
 
         info = ttk.Frame(self.root, padding=8)
         info.pack(fill="x")
@@ -102,19 +89,36 @@ class Dashboard:
             text="Safety: pyautogui FAILSAFE — slam the mouse into a screen corner to abort clicks.",
         ).pack(anchor="w", pady=(6, 0))
 
-        self.preview = tk.Canvas(self.root, height=180, bg="#1a1a1a", highlightthickness=0)
-        self.preview.pack(fill="x", padx=8, pady=4)
+        notebook = ttk.Notebook(self.root)
+        notebook.pack(fill="both", expand=True, padx=8, pady=4)
 
-        ttk.Label(self.root, text="Log").pack(anchor="w", padx=8)
-        self.log_widget = tk.Text(self.root, height=16, wrap="word")
-        self.log_widget.pack(fill="both", expand=True, padx=8, pady=(0, 8))
-        self._append_log("Ready. Calibrate ROI/points before enabling live clicks.")
+        monitor = ttk.Frame(notebook)
+        notebook.add(monitor, text="Monitor")
+
+        self.preview = tk.Canvas(monitor, height=180, bg="#1a1a1a", highlightthickness=0)
+        self.preview.pack(fill="x", padx=4, pady=4)
+
+        ttk.Label(monitor, text="Log").pack(anchor="w", padx=4)
+        self.log_widget = tk.Text(monitor, height=16, wrap="word")
+        self.log_widget.pack(fill="both", expand=True, padx=4, pady=(0, 8))
+        self._append_log("Ready. Calibrate ROI/points, then edit Process Editor waits if needed.")
+
+        editor_tab = ttk.Frame(notebook)
+        notebook.add(editor_tab, text="Process Editor")
+        self._process_editor = ProcessEditorPanel(
+            editor_tab,
+            self.config,
+            self.config_path,
+            on_save=self._on_process_saved,
+        )
+        self._process_editor.frame.pack(fill="both", expand=True)
 
     def start_monitor(self) -> None:
         if self._running:
             return
+        if hasattr(self, "_process_editor"):
+            self._process_editor.save()
         self.config = load_config(self.config_path)
-        self._save_startup_wait()
         self._running = True
         self.status.set("Monitoring")
         self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
@@ -141,28 +145,24 @@ class Dashboard:
         )
 
     def dry_run_recovery(self) -> None:
-        self._save_startup_wait()
+        if hasattr(self, "_process_editor"):
+            self.config.recovery.sequences["restart_app"] = [
+                dict(step) for step in self._process_editor._steps
+            ]
         actions = build_restart_actions(self.config)
         log = run_sequence(actions, self.config, control=None, dry_run=True)
         self.event_log.write({"type": "dry_run_recovery", "steps": [a["action"] for a in log]})
         for entry in log:
             self._append_log(f"DRY-RUN {entry}")
 
-    def _save_startup_wait(self) -> None:
-        try:
-            value = float(self.startup_wait.get())
-        except (tk.TclError, ValueError, TypeError):
-            value = 10.0
-        value = min(180.0, max(1.0, value))
-        self.startup_wait.set(value)
-        self.config.recovery.startup_wait_sec = value
-        save_config(self.config_path, self.config)
-        self._append_log(f"Startup wait set to {value:g}s")
-
     def _on_calibrated(self) -> None:
         save_config(self.config_path, self.config)
         self._append_log(f"Calibration saved to {self.config_path}")
         self._refresh_preview()
+
+    def _on_process_saved(self) -> None:
+        self.config = load_config(self.config_path)
+        self._append_log(f"Process sequence saved ({len(self.config.recovery.sequences.get('restart_app') or [])} steps)")
 
     def _monitor_loop(self) -> None:
         try:

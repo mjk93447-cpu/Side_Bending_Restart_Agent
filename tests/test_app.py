@@ -55,7 +55,6 @@ def test_start_monitor_minimizes_dashboard(tmp_path: Path, monkeypatch) -> None:
 
     monkeypatch.setattr(app_mod, "apply_window_state", fake_apply)
     monkeypatch.setattr(app_mod.threading, "Thread", FakeThread)
-    monkeypatch.setattr(dash, "_save_startup_wait", lambda: None)
     try:
         dash.start_monitor()
         assert calls == [(dash.root, "minimized")]
