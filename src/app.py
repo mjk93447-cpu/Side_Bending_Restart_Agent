@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 import tkinter as tk
@@ -11,14 +12,13 @@ from tkinter import messagebox, ttk
 
 from src.calibrator import POINT_COLORS, run_calibrator
 from src.capture import capture_screen
-from src.config import DEFAULT_CONFIG_PATH, AppConfig, load_config, save_config
+from src.config import AppConfig, ensure_config_file, load_config, save_config
 from src.control import ControlEngine
 from src.events import EventLog
 from src.monitor import Monitor, MonitorTick
 from src.ocr_engine import OCREngine
+from src.paths import APP_VERSION, app_root, logs_dir
 from src.recovery import build_restart_actions, run_sequence
-
-LOG_PATH = Path("logs") / "events.jsonl"
 
 
 def _rule_threshold(config: AppConfig) -> int:
@@ -32,15 +32,15 @@ def _rule_threshold(config: AppConfig) -> int:
 
 class Dashboard:
     def __init__(self, config_path: Path | None = None) -> None:
-        self.config_path = Path(config_path) if config_path else DEFAULT_CONFIG_PATH
+        self.config_path = ensure_config_file(config_path)
         self.config = load_config(self.config_path)
-        self.event_log = EventLog(LOG_PATH)
+        self.event_log = EventLog(logs_dir() / "events.jsonl")
         self._running = False
         self._thread: threading.Thread | None = None
         self._monitor: Monitor | None = None
 
         self.root = tk.Tk()
-        self.root.title("NaN Freeze Restart Agent")
+        self.root.title(f"NaN Freeze Restart Agent v{APP_VERSION}")
         self.root.geometry("820x640")
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -227,7 +227,16 @@ class Dashboard:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    os.chdir(app_root())
+    logs_dir()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+        handlers=[
+            logging.FileHandler(logs_dir() / "agent.log", encoding="utf-8"),
+            logging.StreamHandler(),
+        ],
+    )
     Dashboard().run()
 
 

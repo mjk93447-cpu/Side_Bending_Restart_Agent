@@ -4,7 +4,5 @@ Pillow>=10.3
 pyautogui>=0.9.54
 PyYAML>=6.0
 pytest>=8.0
+pytesseract>=0.3.10
 winsdk>=1.0.0b9; platform_system == "Windows"
-# Optional OCR fallbacks (WinRT is primary and needs no extra model):
-# pytesseract>=0.3.10
-# easyocr>=1.7.0

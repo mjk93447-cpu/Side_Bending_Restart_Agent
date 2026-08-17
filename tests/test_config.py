@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from src.config import DEFAULT_CONFIG_PATH, load_config, save_config
+from src.paths import APP_VERSION
 
 
 def test_load_default_config_threshold_and_wait(tmp_path: Path) -> None:
@@ -85,3 +86,9 @@ def test_save_roundtrip_updates_point(tmp_path: Path) -> None:
 def test_default_config_path_exists() -> None:
     assert DEFAULT_CONFIG_PATH.name == "config.yaml"
     assert DEFAULT_CONFIG_PATH.exists()
+
+
+def test_packaged_version_is_0_2_0() -> None:
+    text = Path("config.yaml").read_text(encoding="utf-8")
+    assert 'version: "0.2.0"' in text
+    assert APP_VERSION == "0.2.0"

@@ -1,0 +1,32 @@
+name: Build offline Windows pack
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  pack:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build offline pack
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -File scripts/build_offline_pack.ps1 -Version 0.2.0
+      - name: Upload pack zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: SideBendingRestartAgent-0.2.0-windows-x64
+          path: dist/SideBendingRestartAgent-0.2.0-windows-x64.zip
+      - name: Attach zip to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh release upload "${{ github.ref_name }}" dist/SideBendingRestartAgent-0.2.0-windows-x64.zip --clobber

@@ -8,7 +8,9 @@ from typing import Any
 
 import yaml
 
-DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
+from src.paths import default_config_path, meipass_dir
+
+DEFAULT_CONFIG_PATH = default_config_path()
 
 
 @dataclass
@@ -104,8 +106,24 @@ class AppConfig:
         }
 
 
+def ensure_config_file(path: str | Path | None = None) -> Path:
+    """Return a writable config.yaml, copying the bundled default if needed."""
+    dest = Path(path) if path is not None else default_config_path()
+    if dest.exists():
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    for candidate in (
+        (meipass_dir() / "config.yaml") if meipass_dir() is not None else None,
+        Path(__file__).resolve().parent.parent / "config.yaml",
+    ):
+        if candidate is not None and candidate.exists() and candidate != dest:
+            dest.write_text(candidate.read_text(encoding="utf-8"), encoding="utf-8")
+            return dest
+    raise FileNotFoundError(f"config.yaml not found at {dest}")
+
+
 def load_config(path: str | Path | None = None) -> AppConfig:
-    cfg_path = Path(path) if path is not None else DEFAULT_CONFIG_PATH
+    cfg_path = ensure_config_file(path)
     with cfg_path.open(encoding="utf-8") as handle:
         raw = yaml.safe_load(handle) or {}
     return _parse_config(raw)

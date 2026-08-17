@@ -1,23 +1,26 @@
-"""Screen OCR engine: WinRT first, then Tesseract, then EasyOCR.
+"""Screen OCR engine: WinRT first, then bundled Tesseract.
 
-Pattern adapted from connector-vision-sop-agent src/ocr_engine.py.
-YOLO / PaddleOCR / Ollama are intentionally omitted.
+EasyOCR remains an optional last resort and is not shipped in the offline pack.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from typing import List, Optional
 
 import cv2
 import numpy as np
 
+from src.paths import find_tesseract_exe
+
 logger = logging.getLogger(__name__)
 
 _WINRT_AVAILABLE: Optional[bool] = None
 _TESSERACT_AVAILABLE: Optional[bool] = None
 _EASYOCR_AVAILABLE: Optional[bool] = None
+_TESSERACT_CONFIGURED = False
 
 
 def _check_winrt() -> bool:
@@ -34,17 +37,32 @@ def _check_winrt() -> bool:
     return _WINRT_AVAILABLE
 
 
+def configure_tesseract() -> bool:
+    """Point pytesseract at the bundled tesseract.exe. Returns True if usable."""
+    global _TESSERACT_CONFIGURED, _TESSERACT_AVAILABLE
+    exe = find_tesseract_exe()
+    if exe is None:
+        _TESSERACT_AVAILABLE = False
+        return False
+    try:
+        import pytesseract
+    except Exception:
+        _TESSERACT_AVAILABLE = False
+        return False
+    pytesseract.pytesseract.tesseract_cmd = str(exe)
+    tessdata = exe.parent / "tessdata"
+    if tessdata.is_dir():
+        os.environ["TESSDATA_PREFIX"] = str(tessdata)
+    _TESSERACT_CONFIGURED = True
+    _TESSERACT_AVAILABLE = True
+    return True
+
+
 def _check_pytesseract() -> bool:
     global _TESSERACT_AVAILABLE
     if _TESSERACT_AVAILABLE is not None:
         return _TESSERACT_AVAILABLE
-    try:
-        import pytesseract  # noqa: F401
-
-        _TESSERACT_AVAILABLE = True
-    except Exception:
-        _TESSERACT_AVAILABLE = False
-    return _TESSERACT_AVAILABLE
+    return configure_tesseract()
 
 
 def _check_easyocr() -> bool:
@@ -60,16 +78,33 @@ def _check_easyocr() -> bool:
     return _EASYOCR_AVAILABLE
 
 
+def _winrt_engine_available() -> bool:
+    if not _check_winrt():
+        return False
+    try:
+        import winsdk.windows.globalization as wg
+        import winsdk.windows.media.ocr as wocr
+
+        engine = wocr.OcrEngine.try_create_from_user_profile_languages()
+        if engine is None:
+            engine = wocr.OcrEngine.try_create_from_language(wg.Language("en-US"))
+        return engine is not None
+    except Exception:
+        return False
+
+
 def _resolve_backend(requested: str) -> str:
     if requested in ("winrt", "pytesseract", "easyocr"):
         return requested
-    if _check_winrt():
+    if _winrt_engine_available():
         return "winrt"
     if _check_pytesseract():
         return "pytesseract"
     if _check_easyocr():
         return "easyocr"
-    return "winrt"
+    if _check_winrt():
+        return "winrt"
+    return "pytesseract"
 
 
 @dataclass
@@ -85,6 +120,8 @@ class OCREngine:
     """WinRT OCR with optional pytesseract / EasyOCR fallbacks."""
 
     def __init__(self, backend: str = "auto") -> None:
+        configure_tesseract()
+        self._requested = backend
         self._backend = _resolve_backend(backend)
         self._easyocr_reader: Optional[object] = None
 
@@ -107,7 +144,18 @@ class OCREngine:
                 return []
 
             if self._backend == "winrt":
-                regions = self._scan_winrt(scan_img)
+                try:
+                    regions = self._scan_winrt(scan_img)
+                except Exception as winrt_exc:
+                    if self._requested == "auto" and configure_tesseract():
+                        logger.warning(
+                            "WinRT OCR failed (%s); falling back to bundled Tesseract",
+                            winrt_exc,
+                        )
+                        self._backend = "pytesseract"
+                        regions = self._scan_pytesseract(scan_img)
+                    else:
+                        raise
             elif self._backend == "easyocr":
                 regions = self._scan_easyocr(scan_img)
             else:
@@ -196,6 +244,10 @@ class OCREngine:
 
     def _scan_pytesseract(self, img_np: np.ndarray) -> List[TextRegion]:
         import pytesseract
+
+        if not configure_tesseract():
+            logger.warning("Bundled Tesseract was not found")
+            return []
 
         gray = cv2.cvtColor(img_np, cv2.COLOR_BGR2GRAY)
         data = pytesseract.image_to_data(gray, output_type=pytesseract.Output.DICT)

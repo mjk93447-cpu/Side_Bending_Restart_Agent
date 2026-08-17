@@ -3,6 +3,25 @@
 from src.ocr_engine import OCREngine, TextRegion, _resolve_backend
 
 
+def test_auto_falls_back_to_tesseract_when_winrt_raises(monkeypatch) -> None:
+    engine = OCREngine(backend="winrt")
+    engine._requested = "auto"
+    engine._backend = "winrt"
+
+    def boom(_img):
+        raise RuntimeError("no language pack")
+
+    fake = [TextRegion("NaN", (0, 0, 1, 1), 1.0, (0, 0), "pytesseract")]
+    monkeypatch.setattr(engine, "_scan_winrt", boom)
+    monkeypatch.setattr("src.ocr_engine.configure_tesseract", lambda: True)
+    monkeypatch.setattr(engine, "_scan_pytesseract", lambda _img: fake)
+    import numpy as np
+
+    result = engine.scan_all(np.zeros((8, 8, 3), dtype=np.uint8))
+    assert result == fake
+    assert engine.backend == "pytesseract"
+
+
 def test_text_region_fields() -> None:
     region = TextRegion(
         text="NaN",
