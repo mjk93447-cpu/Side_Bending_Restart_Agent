@@ -21,6 +21,19 @@ from src.paths import APP_VERSION, app_root, logs_dir
 from src.recovery import build_restart_actions, run_sequence
 
 
+def apply_window_state(window: tk.Misc, state: str) -> str:
+    """Minimize to the taskbar, or restore a hidden dashboard."""
+    if state == "minimized":
+        window.iconify()
+        return "minimized"
+    window.deiconify()
+    try:
+        window.lift()
+    except tk.TclError:
+        pass
+    return "normal"
+
+
 def _rule_threshold(config: AppConfig) -> int:
     for rule in config.rules:
         when = rule.get("when") or {}
@@ -45,6 +58,7 @@ class Dashboard:
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
         self.dry_run = tk.BooleanVar(value=False)
+        self.startup_wait = tk.DoubleVar(value=float(self.config.recovery.startup_wait_sec))
         self.status = tk.StringVar(value="Idle")
         self.count_text = tk.StringVar(value="NaN: -")
         self.confirm_text = tk.StringVar(value="Confirm: 0")
@@ -63,6 +77,19 @@ class Dashboard:
             side="left", padx=4
         )
         ttk.Checkbutton(top, text="Dry-run clicks", variable=self.dry_run).pack(side="left", padx=8)
+        ttk.Label(top, text="Startup wait (sec)").pack(side="left", padx=(16, 4))
+        wait_spin = ttk.Spinbox(
+            top,
+            from_=1,
+            to=180,
+            increment=1,
+            textvariable=self.startup_wait,
+            width=6,
+            command=self._save_startup_wait,
+        )
+        wait_spin.pack(side="left")
+        wait_spin.bind("<Return>", lambda _e: self._save_startup_wait())
+        wait_spin.bind("<FocusOut>", lambda _e: self._save_startup_wait())
 
         info = ttk.Frame(self.root, padding=8)
         info.pack(fill="x")
@@ -87,11 +114,13 @@ class Dashboard:
         if self._running:
             return
         self.config = load_config(self.config_path)
+        self._save_startup_wait()
         self._running = True
         self.status.set("Monitoring")
         self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self._thread.start()
         self._append_log("Monitor started")
+        apply_window_state(self.root, "minimized")
 
     def stop_monitor(self) -> None:
         self._running = False
@@ -112,11 +141,23 @@ class Dashboard:
         )
 
     def dry_run_recovery(self) -> None:
+        self._save_startup_wait()
         actions = build_restart_actions(self.config)
         log = run_sequence(actions, self.config, control=None, dry_run=True)
         self.event_log.write({"type": "dry_run_recovery", "steps": [a["action"] for a in log]})
         for entry in log:
             self._append_log(f"DRY-RUN {entry}")
+
+    def _save_startup_wait(self) -> None:
+        try:
+            value = float(self.startup_wait.get())
+        except (tk.TclError, ValueError, TypeError):
+            value = 10.0
+        value = min(180.0, max(1.0, value))
+        self.startup_wait.set(value)
+        self.config.recovery.startup_wait_sec = value
+        save_config(self.config_path, self.config)
+        self._append_log(f"Startup wait set to {value:g}s")
 
     def _on_calibrated(self) -> None:
         save_config(self.config_path, self.config)
@@ -128,8 +169,7 @@ class Dashboard:
             ocr = OCREngine(backend=self.config.ocr.backend)
             backend = ocr.backend
         except Exception as exc:
-            self.root.after(0, self._append_log, f"OCR init failed: {exc}")
-            self._running = False
+            self.root.after(0, self._on_monitor_failed, str(exc))
             return
         self.root.after(0, self.backend_text.set, f"OCR: {backend}")
         control = ControlEngine(self.config.control)
@@ -153,6 +193,12 @@ class Dashboard:
             deadline = time.time() + interval
             while self._running and time.time() < deadline:
                 time.sleep(0.1)
+
+    def _on_monitor_failed(self, message: str) -> None:
+        self._running = False
+        self.status.set("Idle")
+        self._append_log(f"OCR init failed: {message}")
+        apply_window_state(self.root, "normal")
 
     def _apply_tick(self, tick: MonitorTick) -> None:
         threshold = _rule_threshold(self.config)
@@ -214,6 +260,8 @@ class Dashboard:
             )
 
     def _append_log(self, message: str) -> None:
+        if not hasattr(self, "log_widget"):
+            return
         stamp = time.strftime("%H:%M:%S")
         self.log_widget.insert("end", f"{stamp}  {message}\n")
         self.log_widget.see("end")

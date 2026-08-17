@@ -19,3 +19,6 @@ def test_apply_point_keeps_click_type() -> None:
     assert cfg.points["launch_icon"].click == "double"
     apply_point(cfg, "stop", 9, 8)
     assert cfg.points["stop"].click == "single"
+    apply_point(cfg, "confirm_yes", 100, 200)
+    assert cfg.points["confirm_yes"].x == 100
+    assert cfg.points["confirm_yes"].click == "single"

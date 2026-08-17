@@ -8,7 +8,7 @@ Windows 화면을 OCR로 감시하다가, 테이블 ROI에서 `NaN`이 임계값
 
 릴리즈: https://github.com/mjk93447-cpu/Side_Bending_Restart_Agent/releases
 
-1. `SideBendingRestartAgent-0.2.0-windows-x64.zip` 을 USB 등으로 보안 PC에 복사합니다.
+1. `SideBendingRestartAgent-0.3.0-windows-x64.zip` 을 USB 등으로 보안 PC에 복사합니다.
 2. 압축을 풉니다. 인터넷, Python, Tesseract 설치는 필요 없습니다.
 3. `RUN.bat` 또는 `SideBendingRestartAgent.exe` 를 실행합니다.
 4. **Calibrate** 로 ROI와 클릭 좌표를 저장합니다.
@@ -37,17 +37,17 @@ python -m src
 통팩을 다시 만들 때:
 
 ```bat
-powershell -ExecutionPolicy Bypass -File scripts\build_offline_pack.ps1 -Version 0.2.0
+powershell -ExecutionPolicy Bypass -File scripts\build_offline_pack.ps1 -Version 0.3.0
 ```
 
-산출물: `dist/SideBendingRestartAgent-0.2.0-windows-x64.zip`
+산출물: `dist/SideBendingRestartAgent-0.3.0-windows-x64.zip`
 
 ## 동작
 
 1. 화면을 주기적으로 캡처합니다.
 2. **table ROI**에서 `NaN` 토큰 수를 셉니다.
 3. 기본 임계값 **21개** 이상이 **연속 2회**이면 freeze로 판정합니다.
-4. STOP → 종료(X) → 아이콘 더블클릭 → **10초 대기** → START.
+4. STOP → **1초 대기** → 중앙 팝업 **Yes** → 종료(X) → 아이콘 더블클릭 → **기동 대기**(기본 10초, 설정에서 변경) → START.
 5. 쿨다운(기본 15초) 후 다시 감시합니다.
 
 ## 현장 캘리브레이션 (필수)
@@ -57,14 +57,17 @@ powershell -ExecutionPolicy Bypass -File scripts\build_offline_pack.ps1 -Version
 1. 대상 프로그램을 평소 레이아웃으로 띄웁니다.
 2. 대시보드 **Calibrate**.
 3. 테이블 ROI를 드래그합니다.
-4. STOP / Close(X) / Launch icon / START 위치를 클릭합니다. 아이콘은 기본 더블클릭입니다.
+4. STOP / **Yes (popup)** / Close(X) / Launch icon / START 위치를 클릭합니다. 아이콘은 기본 더블클릭입니다.
 5. **Save** (Enter).
 
-단축키: `r` ROI, `s` STOP, `x` Close, `i` Icon, `t` START.
+단축키: `r` ROI, `s` STOP, `y` Yes, `x` Close, `i` Icon, `t` START.
+
+프로그램이 늦게 켜지면 대시보드 **Startup wait (sec)** 를 늘리십시오 (1–180초, `config.yaml`의 `recovery.startup_wait_sec`).
 
 ## 안전장치
 
 - `pyautogui.FAILSAFE`: 마우스를 화면 모서리로 밀어 넣으면 클릭이 중단됩니다.
+- **Start monitor** 를 누르면 대시보드가 작업 표시줄로 최소화되어 대상 화면을 가리지 않습니다. 작업 표시줄 아이콘으로 다시 열 수 있습니다.
 - 대시보드 **Stop** 은 감시 루프를 멈춥니다.
 - Dry-run 이 켜져 있으면 좌표만 로그하고 클릭하지 않습니다.
 - 디스플레이 배율 **100%** 권장 (캡처와 클릭이 같은 pyautogui 좌표).
@@ -81,7 +84,10 @@ powershell -ExecutionPolicy Bypass -File scripts\build_offline_pack.ps1 -Version
 | `ocr.backend` | auto | winrt / pytesseract |
 | `ocr.n0n_correction` | false | `N0N` 을 NaN으로 인정 |
 | `rois.table` | 하단 중앙 | OCR 영역 |
-| `points.*` | STOP/X/아이콘/START | 클릭 좌표 |
+| `recovery.startup_wait_sec` | 10 | 재실행 후 START 전 대기 (대시보드에서 변경) |
+| `recovery.stop_confirm_wait_sec` | 1 | STOP 후 Yes 팝업 대기 |
+| `points.confirm_yes` | 화면 중앙 근처 | STOP 확인 팝업 Yes |
+| `points.*` | STOP/Yes/X/아이콘/START | 클릭 좌표 |
 | `rules[].when.*.min` | 21 | NaN 개수 임계값 |
 
 `TESSERACT_CMD` 환경 변수로 번들 경로를 덮어쓸 수 있습니다. 기본은 EXE 옆 `tesseract\tesseract.exe` 입니다.

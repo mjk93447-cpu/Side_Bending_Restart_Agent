@@ -8,9 +8,10 @@ from typing import Callable, Optional
 
 from src.config import AppConfig, Point, Roi, save_config
 
-POINT_NAMES = ("stop", "close", "launch_icon", "start")
+POINT_NAMES = ("stop", "confirm_yes", "close", "launch_icon", "start")
 POINT_COLORS = {
     "stop": "#ff5555",
+    "confirm_yes": "#ff66cc",
     "close": "#ffaa00",
     "launch_icon": "#55aaff",
     "start": "#55ff88",
@@ -18,6 +19,7 @@ POINT_COLORS = {
 MODE_LABELS = {
     "roi": "ROI (drag table region)",
     "stop": "STOP button",
+    "confirm_yes": "Yes (popup)",
     "close": "Close / X button",
     "launch_icon": "Launch icon",
     "start": "START button",
@@ -96,6 +98,7 @@ class CalibratorOverlay:
         win.bind("<Return>", lambda _e: self._save())
         win.bind("r", lambda _e: self._set_mode("roi"))
         win.bind("s", lambda _e: self._set_mode("stop"))
+        win.bind("y", lambda _e: self._set_mode("confirm_yes"))
         win.bind("x", lambda _e: self._set_mode("close"))
         win.bind("i", lambda _e: self._set_mode("launch_icon"))
         win.bind("t", lambda _e: self._set_mode("start"))

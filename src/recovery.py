@@ -18,6 +18,12 @@ def build_restart_actions(
     actions: list[dict[str, Any]] = []
     for step in raw_steps:
         action = dict(step)
+        if action.get("action") == "wait":
+            source = action.get("from")
+            if source == "startup_wait_sec":
+                action["sec"] = float(config.recovery.startup_wait_sec)
+            elif source == "stop_confirm_wait_sec":
+                action["sec"] = float(config.recovery.stop_confirm_wait_sec)
         if action.get("action") == "click":
             point_name = action.get("point")
             if not point_name or point_name not in config.points:

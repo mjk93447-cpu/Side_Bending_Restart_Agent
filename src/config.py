@@ -72,6 +72,7 @@ class Point:
 @dataclass
 class RecoveryConfig:
     startup_wait_sec: float = 10.0
+    stop_confirm_wait_sec: float = 1.0
     sequences: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
 
@@ -100,6 +101,7 @@ class AppConfig:
             },
             "recovery": {
                 "startup_wait_sec": self.recovery.startup_wait_sec,
+                "stop_confirm_wait_sec": self.recovery.stop_confirm_wait_sec,
                 "sequences": self.recovery.sequences,
             },
             "rules": self.rules,
@@ -147,13 +149,24 @@ def _parse_config(raw: dict[str, Any]) -> AppConfig:
         for name, mapping in (raw.get("rois") or {}).items()
     }
     points = {
-        name: Point(
+        _normalize_point_name(name): Point(
             x=int(mapping["x"]),
             y=int(mapping["y"]),
             click=str(mapping.get("click", "single")),
         )
         for name, mapping in (raw.get("points") or {}).items()
     }
+    if "confirm_yes" not in points:
+        legacy = points.pop("yes", None) or points.pop(True, None)
+        if legacy is not None:
+            points["confirm_yes"] = legacy
+        else:
+            points["confirm_yes"] = Point(x=880, y=560, click="single")
+
+    sequences = _normalize_sequences(recovery_raw.get("sequences") or {})
+    sequences = _ensure_yes_confirm_step(sequences)
+    sequences = _bind_startup_wait(sequences)
+
     return AppConfig(
         monitor=MonitorConfig(
             interval_sec=float(monitor_raw.get("interval_sec", 2.0)),
@@ -173,7 +186,69 @@ def _parse_config(raw: dict[str, Any]) -> AppConfig:
         points=points,
         recovery=RecoveryConfig(
             startup_wait_sec=float(recovery_raw.get("startup_wait_sec", 10)),
-            sequences=dict(recovery_raw.get("sequences") or {}),
+            stop_confirm_wait_sec=float(recovery_raw.get("stop_confirm_wait_sec", 1)),
+            sequences=sequences,
         ),
         rules=list(raw.get("rules") or []),
     )
+
+
+def _normalize_point_name(name: Any) -> str:
+    # YAML 1.1 treats unquoted yes/on as boolean True.
+    if name is True or str(name).lower() in {"yes", "true"}:
+        return "confirm_yes"
+    return str(name)
+
+
+def _normalize_sequences(
+    sequences: dict[str, list[dict[str, Any]]],
+) -> dict[str, list[dict[str, Any]]]:
+    normalized: dict[str, list[dict[str, Any]]] = {}
+    for name, steps in dict(sequences).items():
+        copied: list[dict[str, Any]] = []
+        for step in steps or []:
+            item = dict(step)
+            if "point" in item:
+                item["point"] = _normalize_point_name(item["point"])
+            copied.append(item)
+        normalized[name] = copied
+    return normalized
+
+
+def _ensure_yes_confirm_step(
+    sequences: dict[str, list[dict[str, Any]]],
+) -> dict[str, list[dict[str, Any]]]:
+    steps = list(sequences.get("restart_app") or [])
+    if not steps:
+        return sequences
+    if any(step.get("point") == "confirm_yes" for step in steps):
+        return sequences
+    inserted: list[dict[str, Any]] = []
+    added = False
+    for step in steps:
+        inserted.append(step)
+        if not added and step.get("action") == "click" and step.get("point") == "stop":
+            inserted.append({"action": "wait", "from": "stop_confirm_wait_sec"})
+            inserted.append({"action": "click", "point": "confirm_yes"})
+            added = True
+    sequences["restart_app"] = inserted
+    return sequences
+
+
+def _bind_startup_wait(
+    sequences: dict[str, list[dict[str, Any]]],
+) -> dict[str, list[dict[str, Any]]]:
+    steps = list(sequences.get("restart_app") or [])
+    bound: list[dict[str, Any]] = []
+    after_icon = False
+    for step in steps:
+        item = dict(step)
+        if after_icon and item.get("action") == "wait":
+            item["from"] = "startup_wait_sec"
+            after_icon = False
+        if item.get("action") == "click" and item.get("point") == "launch_icon":
+            after_icon = True
+        bound.append(item)
+    if steps:
+        sequences["restart_app"] = bound
+    return sequences

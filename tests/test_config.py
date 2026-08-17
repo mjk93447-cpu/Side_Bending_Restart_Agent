@@ -20,6 +20,8 @@ def test_load_default_config_threshold_and_wait(tmp_path: Path) -> None:
     assert cfg.ocr.n0n_correction is False
     assert cfg.control.failsafe is True
     assert cfg.recovery.startup_wait_sec == 10
+    assert cfg.recovery.stop_confirm_wait_sec == 1
+    assert "confirm_yes" in cfg.points
 
     rule = next(r for r in cfg.rules if r["name"] == "nan_table_freeze")
     assert rule["enabled"] is True
@@ -88,7 +90,91 @@ def test_default_config_path_exists() -> None:
     assert DEFAULT_CONFIG_PATH.exists()
 
 
-def test_packaged_version_is_0_2_0() -> None:
+def test_old_config_gains_yes_step_and_startup_wait_binding(tmp_path: Path) -> None:
+    dest = tmp_path / "config.yaml"
+    dest.write_text(
+        """
+monitor: {interval_sec: 1, confirm_scans: 1, cooldown_sec: 1}
+ocr: {backend: auto, n0n_correction: false}
+control: {move_duration: 0.1, click_pause: 0.1, failsafe: true}
+rois:
+  table: {x: 1, y: 2, w: 3, h: 4}
+points:
+  stop: {x: 10, y: 10, click: single}
+  close: {x: 20, y: 20, click: single}
+  launch_icon: {x: 30, y: 30, click: double}
+  start: {x: 40, y: 40, click: single}
+recovery:
+  startup_wait_sec: 18
+  sequences:
+    restart_app:
+      - {action: click, point: stop}
+      - {action: wait, sec: 0.5}
+      - {action: click, point: close}
+      - {action: wait, sec: 1.0}
+      - {action: click, point: launch_icon}
+      - {action: wait, sec: 10}
+      - {action: click, point: start}
+rules: []
+""",
+        encoding="utf-8",
+    )
+    from src.recovery import build_restart_actions
+
+    cfg = load_config(dest)
+    assert "confirm_yes" in cfg.points
+    clicks = [a.get("point") for a in build_restart_actions(cfg) if a["action"] == "click"]
+    assert clicks == ["stop", "confirm_yes", "close", "launch_icon", "start"]
+    waits = [a["sec"] for a in build_restart_actions(cfg) if a["action"] == "wait"]
+    assert waits[0] == 1
+    assert waits[-1] == 18
+
+
+def test_unquoted_yaml_yes_becomes_confirm_yes(tmp_path: Path) -> None:
+    dest = tmp_path / "config.yaml"
+    dest.write_text(
+        """
+monitor: {interval_sec: 1, confirm_scans: 1, cooldown_sec: 1}
+ocr: {backend: auto, n0n_correction: false}
+control: {move_duration: 0.1, click_pause: 0.1, failsafe: true}
+rois:
+  table: {x: 1, y: 2, w: 3, h: 4}
+points:
+  stop: {x: 10, y: 10, click: single}
+  yes: {x: 88, y: 56, click: single}
+  close: {x: 20, y: 20, click: single}
+  launch_icon: {x: 30, y: 30, click: double}
+  start: {x: 40, y: 40, click: single}
+recovery:
+  startup_wait_sec: 10
+  sequences:
+    restart_app:
+      - {action: click, point: stop}
+      - {action: wait, sec: 1}
+      - {action: click, point: yes}
+      - {action: wait, sec: 0.5}
+      - {action: click, point: close}
+      - {action: wait, sec: 1.0}
+      - {action: click, point: launch_icon}
+      - {action: wait, sec: 10}
+      - {action: click, point: start}
+rules: []
+""",
+        encoding="utf-8",
+    )
+    from src.recovery import build_restart_actions
+
+    cfg = load_config(dest)
+    assert "confirm_yes" in cfg.points
+    assert "yes" not in cfg.points
+    assert True not in cfg.points
+    assert cfg.points["confirm_yes"].x == 88
+    clicks = [a.get("point") for a in build_restart_actions(cfg) if a["action"] == "click"]
+    assert clicks == ["stop", "confirm_yes", "close", "launch_icon", "start"]
+
+
+def test_packaged_version_is_0_3_0() -> None:
     text = Path("config.yaml").read_text(encoding="utf-8")
-    assert 'version: "0.2.0"' in text
-    assert APP_VERSION == "0.2.0"
+    assert 'version: "0.3.0"' in text
+    assert APP_VERSION == "0.3.0"
+    assert Path("VERSION").read_text(encoding="utf-8").strip() == "0.3.0"

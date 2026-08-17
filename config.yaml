@@ -1,4 +1,4 @@
-version: "0.2.0"
+version: "0.3.0"
 
 monitor:
   interval_sec: 2.0
@@ -27,6 +27,10 @@ points:
     x: 1750
     y: 980
     click: single
+  confirm_yes:
+    x: 880
+    y: 560
+    click: single
   close:
     x: 1890
     y: 20
@@ -42,10 +46,15 @@ points:
 
 recovery:
   startup_wait_sec: 10
+  stop_confirm_wait_sec: 1
   sequences:
     restart_app:
       - action: click
         point: stop
+      - action: wait
+        from: stop_confirm_wait_sec
+      - action: click
+        point: confirm_yes
       - action: wait
         sec: 0.5
       - action: click
@@ -55,7 +64,7 @@ recovery:
       - action: click
         point: launch_icon
       - action: wait
-        sec: 10
+        from: startup_wait_sec
       - action: click
         point: start
 
