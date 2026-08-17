@@ -1,0 +1,69 @@
+monitor:
+  interval_sec: 2.0
+  confirm_scans: 2
+  cooldown_sec: 15.0
+
+ocr:
+  backend: auto
+  n0n_correction: false
+
+control:
+  move_duration: 0.30
+  click_pause: 0.50
+  failsafe: true
+
+# Default table ROI: bottom-center on 1920x1080. Recalibrate on the line PC.
+rois:
+  table:
+    x: 480
+    y: 756
+    w: 960
+    h: 250
+
+points:
+  stop:
+    x: 1750
+    y: 980
+    click: single
+  close:
+    x: 1890
+    y: 20
+    click: single
+  launch_icon:
+    x: 960
+    y: 1040
+    click: double
+  start:
+    x: 1850
+    y: 980
+    click: single
+
+recovery:
+  startup_wait_sec: 10
+  sequences:
+    restart_app:
+      - action: click
+        point: stop
+      - action: wait
+        sec: 0.5
+      - action: click
+        point: close
+      - action: wait
+        sec: 1.0
+      - action: click
+        point: launch_icon
+      - action: wait
+        sec: 10
+      - action: click
+        point: start
+
+rules:
+  - name: nan_table_freeze
+    enabled: true
+    when:
+      all:
+        - type: ocr_count
+          roi: table
+          pattern: "(?i)\\bnan\\b"
+          min: 21
+    then: restart_app
