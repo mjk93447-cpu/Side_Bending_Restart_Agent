@@ -8,7 +8,7 @@ Windows 화면을 OCR로 감시하다가, 테이블 ROI에서 `NaN`이 임계값
 
 릴리즈: https://github.com/mjk93447-cpu/Side_Bending_Restart_Agent/releases
 
-1. `SideBendingRestartAgent-0.4.1-windows-x64.zip` 을 USB 등으로 보안 PC에 복사합니다.
+1. `SideBendingRestartAgent-0.4.2-windows-x64.zip` 을 USB 등으로 보안 PC에 복사합니다.
 2. 압축을 풉니다. 인터넷, Python, Tesseract 설치는 필요 없습니다.
 3. `RUN.bat` 또는 `SideBendingRestartAgent.exe` 를 실행합니다.
 4. **Calibrate** 로 ROI와 클릭 좌표를 저장합니다.
@@ -37,10 +37,10 @@ python -m src
 통팩을 다시 만들 때:
 
 ```bat
-powershell -ExecutionPolicy Bypass -File scripts\build_offline_pack.ps1 -Version 0.4.1
+powershell -ExecutionPolicy Bypass -File scripts\build_offline_pack.ps1 -Version 0.4.2
 ```
 
-산출물: `dist/SideBendingRestartAgent-0.4.1-windows-x64.zip`
+산출물: `dist/SideBendingRestartAgent-0.4.2-windows-x64.zip`
 
 ## 동작
 
@@ -70,7 +70,7 @@ SOP 에이전트의 SOP Edit 탭과 같이, 복구 단계를 표로 편집합니
 - **Edit** — 대기 초, 클릭 포인트, 사용 여부
 - **Exclude / Include** — 단계는 남기고 실행에서만 빼기
 - **Delete / Move up / Move down**
-- **Save** — `config.yaml`에 저장
+- **Save** — `config.yaml`에 저장. 모니터가 이미 실행 중이면 다음 복구부터 새 대기 시간이 적용됩니다.
 
 기본 종료 후 대기는 5초입니다. 프로그램이 이미 실행 중 오류가 나면 이 값을 늘리십시오.
 

@@ -4,7 +4,7 @@
   Build an offline Windows pack: EXE + bundled Tesseract, no pip/internet on the target PC.
 #>
 param(
-    [string]$Version = "0.4.1"
+    [string]$Version = "0.4.2"
 )
 
 $ErrorActionPreference = "Stop"

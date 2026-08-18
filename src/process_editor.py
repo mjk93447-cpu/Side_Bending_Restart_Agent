@@ -317,9 +317,11 @@ class ProcessEditorPanel:
         form = ttk.Frame(dialog, padding=10)
         form.pack(fill="both", expand=True)
         ttk.Label(form, text="Type").grid(row=0, column=0, sticky="w", pady=4)
-        ttk.Combobox(
+        kind_combo = ttk.Combobox(
             form, textvariable=kind, values=("click", "wait"), state="readonly", width=16
-        ).grid(row=0, column=1, sticky="w")
+        )
+        kind_combo.grid(row=0, column=1, sticky="w")
+        kind_combo.set(kind.get())
         ttk.Label(form, text="Click point").grid(row=1, column=0, sticky="w", pady=4)
         ttk.Combobox(
             form,
@@ -329,16 +331,21 @@ class ProcessEditorPanel:
             width=16,
         ).grid(row=1, column=1, sticky="w")
         ttk.Label(form, text="Wait (sec)").grid(row=2, column=0, sticky="w", pady=4)
-        ttk.Spinbox(form, from_=0.1, to=180, increment=0.5, textvariable=wait, width=10).grid(
-            row=2, column=1, sticky="w"
+        wait_spin = ttk.Spinbox(
+            form, from_=0.0, to=180, increment=0.5, textvariable=wait, width=10
         )
+        wait_spin.grid(row=2, column=1, sticky="w")
         ttk.Checkbutton(form, text="Enabled (uncheck to exclude)", variable=enabled).grid(
             row=3, column=0, columnspan=2, sticky="w", pady=6
         )
 
         def accept() -> None:
+            try:
+                wait_sec = float(wait_spin.get())
+            except (TypeError, ValueError):
+                wait_sec = float(wait.get())
             if kind.get() == "wait":
-                result["step"] = new_wait_step(float(wait.get()), enabled=bool(enabled.get()))
+                result["step"] = new_wait_step(wait_sec, enabled=bool(enabled.get()))
             else:
                 result["step"] = new_click_step(point.get(), enabled=bool(enabled.get()))
             dialog.destroy()

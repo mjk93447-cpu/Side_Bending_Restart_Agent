@@ -21,7 +21,7 @@ jobs:
           if ("${{ github.ref }}" -like "refs/tags/v*") {
             $v = "${{ github.ref_name }}".Substring(1)
           } else {
-            $v = "0.4.1"
+            $v = "0.4.2"
           }
           Add-Content -Path $env:GITHUB_OUTPUT -Value "version=$v"
       - name: Build offline pack
