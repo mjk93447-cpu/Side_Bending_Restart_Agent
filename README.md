@@ -8,7 +8,7 @@ Windows 화면을 OCR로 감시하다가, 테이블 ROI에서 `NaN`이 임계값
 
 릴리즈: https://github.com/mjk93447-cpu/Side_Bending_Restart_Agent/releases
 
-1. `SideBendingRestartAgent-0.4.0-windows-x64.zip` 을 USB 등으로 보안 PC에 복사합니다.
+1. `SideBendingRestartAgent-0.4.1-windows-x64.zip` 을 USB 등으로 보안 PC에 복사합니다.
 2. 압축을 풉니다. 인터넷, Python, Tesseract 설치는 필요 없습니다.
 3. `RUN.bat` 또는 `SideBendingRestartAgent.exe` 를 실행합니다.
 4. **Calibrate** 로 ROI와 클릭 좌표를 저장합니다.
@@ -37,10 +37,10 @@ python -m src
 통팩을 다시 만들 때:
 
 ```bat
-powershell -ExecutionPolicy Bypass -File scripts\build_offline_pack.ps1 -Version 0.4.0
+powershell -ExecutionPolicy Bypass -File scripts\build_offline_pack.ps1 -Version 0.4.1
 ```
 
-산출물: `dist/SideBendingRestartAgent-0.4.0-windows-x64.zip`
+산출물: `dist/SideBendingRestartAgent-0.4.1-windows-x64.zip`
 
 ## 동작
 

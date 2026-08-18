@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional
 
-from src.config import AppConfig, save_config
+from src.config import AppConfig, load_config, save_config
 
 
 def flatten_wait_step(
@@ -102,6 +102,15 @@ def describe_step(step: dict[str, Any]) -> str:
         return f"Wait {float(step.get('sec', 0)):g}s"
     point = step.get("point", "?")
     return f"Click {point}"
+
+
+def save_process_steps(config_path: Any, steps: list[dict[str, Any]]) -> AppConfig:
+    """Write sequence edits onto the latest yaml so calibration is not overwritten."""
+    latest = load_config(config_path)
+    latest.recovery.sequences["restart_app"] = [dict(step) for step in steps]
+    latest.recovery.editor_managed = True
+    save_config(config_path, latest)
+    return latest
 
 
 class ProcessEditorPanel:
@@ -283,13 +292,13 @@ class ProcessEditorPanel:
         if 0 <= dest < len(self._steps):
             self._tree.selection_set(str(dest))
 
-    def save(self) -> None:
-        self.config.recovery.sequences["restart_app"] = [dict(step) for step in self._steps]
-        self.config.recovery.editor_managed = True
-        save_config(self.config_path, self.config)
+    def save(self) -> AppConfig:
+        latest = save_process_steps(self.config_path, self._steps)
+        self.config = latest
         self._status.set(f"Saved {len(self._steps)} steps to {self.config_path}")
         if self.on_save is not None:
             self.on_save()
+        return latest
 
     def _edit_dialog(self, step: dict[str, Any]) -> Optional[dict[str, Any]]:
         tk = self._tk

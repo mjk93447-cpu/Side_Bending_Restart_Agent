@@ -117,8 +117,9 @@ class Dashboard:
         if self._running:
             return
         if hasattr(self, "_process_editor"):
-            self._process_editor.save()
-        self.config = load_config(self.config_path)
+            self.config = self._process_editor.save()
+        else:
+            self.config = load_config(self.config_path)
         self._running = True
         self.status.set("Monitoring")
         self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
@@ -157,11 +158,13 @@ class Dashboard:
 
     def _on_calibrated(self) -> None:
         save_config(self.config_path, self.config)
+        if hasattr(self, "_process_editor"):
+            self._process_editor.config = self.config
         self._append_log(f"Calibration saved to {self.config_path}")
         self._refresh_preview()
 
     def _on_process_saved(self) -> None:
-        self.config = load_config(self.config_path)
+        self.config = self._process_editor.config
         self._append_log(f"Process sequence saved ({len(self.config.recovery.sequences.get('restart_app') or [])} steps)")
 
     def _monitor_loop(self) -> None:

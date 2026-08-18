@@ -1,5 +1,8 @@
 """Process sequence editing: waits, enable/disable, add/remove."""
 
+from pathlib import Path
+
+from src.config import load_config, save_config
 from src.process_editor import (
     delete_step,
     describe_step,
@@ -56,3 +59,19 @@ def test_set_wait_and_disable() -> None:
 def test_describe_click_and_wait() -> None:
     assert "stop" in describe_step(new_click_step("stop")).lower()
     assert "5" in describe_step(new_wait_step(5))
+
+
+def test_save_process_steps_does_not_clobber_calibration(tmp_path: Path) -> None:
+    dest = tmp_path / "config.yaml"
+    dest.write_text(Path("config.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+    stale = load_config(dest)
+    calibrated = load_config(dest)
+    calibrated.points["stop"].x = 1234
+    calibrated.rois["table"].x = 42
+    save_config(dest, calibrated)
+    from src.process_editor import save_process_steps
+
+    save_process_steps(dest, stale.recovery.sequences["restart_app"])
+    reloaded = load_config(dest)
+    assert reloaded.points["stop"].x == 1234
+    assert reloaded.rois["table"].x == 42

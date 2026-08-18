@@ -82,3 +82,39 @@ def test_start_monitor_skips_minimize_when_already_running(
     finally:
         dash._running = False
         dash.root.destroy()
+
+
+def test_start_monitor_does_not_reset_saved_calibration(tmp_path: Path, monkeypatch) -> None:
+    dest = tmp_path / "config.yaml"
+    dest.write_text(Path("config.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+    dash = app_mod.Dashboard(config_path=dest)
+    dash.root.withdraw()
+
+    class FakeThread:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def start(self) -> None:
+            pass
+
+    monkeypatch.setattr(app_mod.threading, "Thread", FakeThread)
+    monkeypatch.setattr(app_mod, "apply_window_state", lambda *_a, **_k: "minimized")
+    try:
+        dash.start_monitor()
+        dash.stop_monitor()
+        dash.config.points["stop"].x = 1234
+        dash.config.points["stop"].y = 5678
+        dash.config.rois["table"].x = 42
+        dash.config.rois["table"].y = 43
+        from src.config import load_config, save_config
+
+        save_config(dest, dash.config)
+        dash.start_monitor()
+        reloaded = load_config(dest)
+        assert reloaded.points["stop"].x == 1234
+        assert reloaded.points["stop"].y == 5678
+        assert reloaded.rois["table"].x == 42
+        assert reloaded.rois["table"].y == 43
+    finally:
+        dash._running = False
+        dash.root.destroy()

@@ -211,8 +211,8 @@ rules: []
     assert clicks == ["stop", "close", "launch_icon", "start"]
 
 
-def test_packaged_version_is_0_4_0() -> None:
+def test_packaged_version_is_0_4_1() -> None:
     text = Path("config.yaml").read_text(encoding="utf-8")
-    assert 'version: "0.4.0"' in text
-    assert APP_VERSION == "0.4.0"
-    assert Path("VERSION").read_text(encoding="utf-8").strip() == "0.4.0"
+    assert 'version: "0.4.1"' in text
+    assert APP_VERSION == "0.4.1"
+    assert Path("VERSION").read_text(encoding="utf-8").strip() == "0.4.1"
