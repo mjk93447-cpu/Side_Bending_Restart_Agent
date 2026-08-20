@@ -100,6 +100,7 @@ exe = EXE(
     upx=False,
     console=False,
     disable_windowed_traceback=False,
+    uac_admin=True,
 )
 
 coll = COLLECT(

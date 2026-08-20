@@ -40,6 +40,18 @@ def new_wait_step(sec: float, enabled: bool = True) -> dict[str, Any]:
     return {"action": "wait", "sec": float(sec), "enabled": bool(enabled)}
 
 
+def new_launch_step(
+    path: str = "",
+    as_admin: bool = True,
+    enabled: bool = True,
+) -> dict[str, Any]:
+    step = {"action": "launch", "as_admin": bool(as_admin), "enabled": bool(enabled)}
+    cleaned = str(path or "").strip().strip('"')
+    if cleaned:
+        step["path"] = cleaned
+    return step
+
+
 def insert_step(
     steps: list[dict[str, Any]],
     index: int,
@@ -100,15 +112,26 @@ def set_wait_seconds(
 def describe_step(step: dict[str, Any]) -> str:
     if step.get("action") == "wait":
         return f"Wait {float(step.get('sec', 0)):g}s"
+    if step.get("action") == "launch":
+        path = str(step.get("path") or "").strip()
+        name = path.replace("\\", "/").rstrip("/").split("/")[-1] if path else "(set path above)"
+        kind = "as admin" if step.get("as_admin", True) else "process"
+        return f"Launch {kind}: {name}"
     point = step.get("point", "?")
     return f"Click {point}"
 
 
-def save_process_steps(config_path: Any, steps: list[dict[str, Any]]) -> AppConfig:
+def save_process_steps(
+    config_path: Any,
+    steps: list[dict[str, Any]],
+    launch_path: Optional[str] = None,
+) -> AppConfig:
     """Write sequence edits onto the latest yaml so calibration is not overwritten."""
     latest = load_config(config_path)
     latest.recovery.sequences["restart_app"] = [dict(step) for step in steps]
     latest.recovery.editor_managed = True
+    if launch_path is not None:
+        latest.recovery.launch_path = str(launch_path).strip().strip('"')
     save_config(config_path, latest)
     return latest
 
@@ -137,6 +160,7 @@ class ProcessEditorPanel:
         self._messagebox = messagebox
         self.frame = ttk.Frame(parent, padding=8)
         self._status = tk.StringVar(value="")
+        self._launch_path = tk.StringVar(value=str(config.recovery.launch_path or ""))
         self._build()
         self.refresh()
 
@@ -151,8 +175,16 @@ class ProcessEditorPanel:
         header.pack(anchor="w")
         ttk.Label(
             self.frame,
-            text="Add, exclude, delete, or change wait seconds. Save writes config.yaml.",
+            text="Add, exclude, delete, or change wait seconds. Launch uses Run as administrator, not icon double-click.",
         ).pack(anchor="w", pady=(0, 6))
+
+        path_row = ttk.Frame(self.frame)
+        path_row.pack(fill="x", pady=(0, 6))
+        ttk.Label(path_row, text="Launch as admin").pack(side="left")
+        ttk.Entry(path_row, textvariable=self._launch_path).pack(
+            side="left", fill="x", expand=True, padx=6
+        )
+        ttk.Button(path_row, text="Browse…", command=self._on_browse_launch).pack(side="left")
 
         columns = ("on", "n", "action", "detail", "param")
         self._tree = ttk.Treeview(
@@ -179,6 +211,9 @@ class ProcessEditorPanel:
         ttk.Button(buttons, text="Add wait", command=self._on_add_wait).pack(
             side="left", padx=2
         )
+        ttk.Button(buttons, text="Add launch", command=self._on_add_launch).pack(
+            side="left", padx=2
+        )
         ttk.Button(buttons, text="Edit", command=self._on_edit).pack(side="left", padx=2)
         ttk.Button(buttons, text="Exclude / Include", command=self._on_toggle).pack(
             side="left", padx=2
@@ -198,6 +233,7 @@ class ProcessEditorPanel:
 
     def set_config(self, config: AppConfig) -> None:
         self.config = config
+        self._launch_path.set(str(config.recovery.launch_path or ""))
         self._steps = [
             dict(step) for step in (config.recovery.sequences.get("restart_app") or [])
         ]
@@ -212,6 +248,9 @@ class ProcessEditorPanel:
             if step.get("action") == "wait":
                 detail = describe_step(step)
                 param = f"{float(step.get('sec', 0)):g}s"
+            elif step.get("action") == "launch":
+                detail = describe_step(step)
+                param = "as admin" if step.get("as_admin", True) else "process"
             else:
                 detail = describe_step(step)
                 point = self.config.points.get(str(step.get("point") or ""))
@@ -253,6 +292,29 @@ class ProcessEditorPanel:
         self._steps = insert_step(self._steps, insert_at, step)
         self.refresh()
 
+    def _on_add_launch(self) -> None:
+        step = self._edit_dialog(new_launch_step(self._launch_path.get(), as_admin=True))
+        if step is None:
+            return
+        index = self._selected_index()
+        insert_at = index + 1 if index >= 0 else len(self._steps)
+        self._steps = insert_step(self._steps, insert_at, step)
+        self.refresh()
+
+    def _on_browse_launch(self) -> None:
+        from tkinter import filedialog
+
+        chosen = filedialog.askopenfilename(
+            parent=self.frame.winfo_toplevel(),
+            title="Select program to Run as administrator",
+            filetypes=(
+                ("Programs", "*.exe *.lnk *.bat *.cmd"),
+                ("All files", "*.*"),
+            ),
+        )
+        if chosen:
+            self._launch_path.set(chosen)
+
     def _on_edit(self) -> None:
         index = self._selected_index()
         if index < 0:
@@ -293,7 +355,9 @@ class ProcessEditorPanel:
             self._tree.selection_set(str(dest))
 
     def save(self) -> AppConfig:
-        latest = save_process_steps(self.config_path, self._steps)
+        latest = save_process_steps(
+            self.config_path, self._steps, launch_path=self._launch_path.get()
+        )
         self.config = latest
         self._status.set(f"Saved {len(self._steps)} steps to {self.config_path}")
         if self.on_save is not None:
@@ -312,13 +376,18 @@ class ProcessEditorPanel:
         kind = tk.StringVar(value=str(step.get("action") or "click"))
         point = tk.StringVar(value=str(step.get("point") or next(iter(self.config.points), "stop")))
         wait = tk.DoubleVar(value=float(step.get("sec") or 1.0))
+        launch_path = tk.StringVar(value=str(step.get("path") or self._launch_path.get() or ""))
         enabled = tk.BooleanVar(value=bool(step.get("enabled", True)))
 
         form = ttk.Frame(dialog, padding=10)
         form.pack(fill="both", expand=True)
         ttk.Label(form, text="Type").grid(row=0, column=0, sticky="w", pady=4)
         kind_combo = ttk.Combobox(
-            form, textvariable=kind, values=("click", "wait"), state="readonly", width=16
+            form,
+            textvariable=kind,
+            values=("click", "wait", "launch"),
+            state="readonly",
+            width=16,
         )
         kind_combo.grid(row=0, column=1, sticky="w")
         kind_combo.set(kind.get())
@@ -335,8 +404,10 @@ class ProcessEditorPanel:
             form, from_=0.0, to=180, increment=0.5, textvariable=wait, width=10
         )
         wait_spin.grid(row=2, column=1, sticky="w")
+        ttk.Label(form, text="Launch path").grid(row=3, column=0, sticky="w", pady=4)
+        ttk.Entry(form, textvariable=launch_path, width=36).grid(row=3, column=1, sticky="we")
         ttk.Checkbutton(form, text="Enabled (uncheck to exclude)", variable=enabled).grid(
-            row=3, column=0, columnspan=2, sticky="w", pady=6
+            row=4, column=0, columnspan=2, sticky="w", pady=6
         )
 
         def accept() -> None:
@@ -344,8 +415,15 @@ class ProcessEditorPanel:
                 wait_sec = float(wait_spin.get())
             except (TypeError, ValueError):
                 wait_sec = float(wait.get())
-            if kind.get() == "wait":
+            chosen = kind.get()
+            if chosen == "wait":
                 result["step"] = new_wait_step(wait_sec, enabled=bool(enabled.get()))
+            elif chosen == "launch":
+                result["step"] = new_launch_step(
+                    launch_path.get() or self._launch_path.get(),
+                    as_admin=True,
+                    enabled=bool(enabled.get()),
+                )
             else:
                 result["step"] = new_click_step(point.get(), enabled=bool(enabled.get()))
             dialog.destroy()
@@ -354,7 +432,7 @@ class ProcessEditorPanel:
             dialog.destroy()
 
         row = ttk.Frame(form)
-        row.grid(row=4, column=0, columnspan=2, pady=8)
+        row.grid(row=5, column=0, columnspan=2, pady=8)
         ttk.Button(row, text="OK", command=accept).pack(side="left", padx=4)
         ttk.Button(row, text="Cancel", command=cancel).pack(side="left", padx=4)
         dialog.wait_window()

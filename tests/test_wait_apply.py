@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import ttk
 
 import src.app as app_mod
-from src.config import load_config
+from src.config import load_config, save_config
 from src.monitor import Monitor
 from src.process_editor import save_process_steps, set_wait_seconds
 from src.recovery import build_restart_actions, run_sequence
@@ -15,14 +15,19 @@ from src.recovery import build_restart_actions, run_sequence
 def _copy_config(tmp_path: Path) -> Path:
     dest = tmp_path / "config.yaml"
     dest.write_text(Path("config.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+    exe = tmp_path / "line_app.exe"
+    exe.write_bytes(b"MZ")
+    cfg = load_config(dest)
+    cfg.recovery.launch_path = str(exe)
+    save_config(dest, cfg)
     return dest
 
 
 def _startup_wait_index(steps: list[dict]) -> int:
     for index, step in enumerate(steps):
-        if step.get("point") == "launch_icon":
+        if step.get("action") == "launch" or step.get("point") == "launch_icon":
             return index + 1
-    raise AssertionError("launch_icon step missing")
+    raise AssertionError("launch step missing")
 
 
 class RecordingControl:
@@ -40,6 +45,12 @@ class RecordingControl:
         self.calls.append(("wait", float(sec)))
         if self.sleep:
             time.sleep(float(sec))
+
+    def launch_as_admin(self, path, arguments=""):
+        self.calls.append(("launch_admin", path, arguments))
+        from src.control import ControlResult
+
+        return ControlResult(True, None, 0.0)
 
 
 def _walk(widget: tk.Misc):
@@ -75,8 +86,8 @@ def test_saved_15s_wait_is_used_by_recovery(tmp_path: Path) -> None:
     control = RecordingControl(sleep=False)
     run_sequence(actions, reloaded, control=control, dry_run=False)
     assert ("wait", 15.0) in control.calls
-    icon_at = next(i for i, a in enumerate(actions) if a.get("point") == "launch_icon")
-    assert actions[icon_at + 1]["sec"] == 15
+    launch_at = next(i for i, a in enumerate(actions) if a.get("action") == "launch")
+    assert actions[launch_at + 1]["sec"] == 15
 
 
 def test_dashboard_save_applies_15s_wait(tmp_path: Path, monkeypatch) -> None:
@@ -173,8 +184,8 @@ def test_process_save_updates_running_monitor_waits(tmp_path: Path, monkeypatch)
         dash._process_editor._steps = set_wait_seconds(dash._process_editor._steps, idx, 15)
         dash._process_editor.save()
         actions = build_restart_actions(dash._monitor.config)
-        icon_at = next(i for i, a in enumerate(actions) if a.get("point") == "launch_icon")
-        assert actions[icon_at + 1]["sec"] == 15
+        launch_at = next(i for i, a in enumerate(actions) if a.get("action") == "launch")
+        assert actions[launch_at + 1]["sec"] == 15
     finally:
         dash._running = False
         dash.root.destroy()
@@ -207,8 +218,8 @@ def test_start_monitor_while_running_applies_new_wait(tmp_path: Path, monkeypatc
         dash.start_monitor()
         assert dash._running is True
         actions = build_restart_actions(dash._monitor.config)
-        icon_at = next(i for i, a in enumerate(actions) if a.get("point") == "launch_icon")
-        assert actions[icon_at + 1]["sec"] == 15
+        launch_at = next(i for i, a in enumerate(actions) if a.get("action") == "launch")
+        assert actions[launch_at + 1]["sec"] == 15
         yaml_text = dest.read_text(encoding="utf-8")
         assert "sec: 15" in yaml_text
     finally:

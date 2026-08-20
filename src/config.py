@@ -74,6 +74,7 @@ class RecoveryConfig:
     startup_wait_sec: float = 10.0
     stop_confirm_wait_sec: float = 1.0
     editor_managed: bool = False
+    launch_path: str = ""
     sequences: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
 
@@ -104,6 +105,7 @@ class AppConfig:
                 "startup_wait_sec": self.recovery.startup_wait_sec,
                 "stop_confirm_wait_sec": self.recovery.stop_confirm_wait_sec,
                 "editor_managed": self.recovery.editor_managed,
+                "launch_path": self.recovery.launch_path,
                 "sequences": self.recovery.sequences,
             },
             "rules": self.rules,
@@ -189,6 +191,7 @@ def _parse_config(raw: dict[str, Any]) -> AppConfig:
             startup_wait_sec=float(recovery_raw.get("startup_wait_sec", 10)),
             stop_confirm_wait_sec=float(recovery_raw.get("stop_confirm_wait_sec", 1)),
             editor_managed=bool(recovery_raw.get("editor_managed", False)),
+            launch_path=str(recovery_raw.get("launch_path") or "").strip().strip('"'),
             sequences=sequences,
         ),
         rules=list(raw.get("rules") or []),
@@ -262,6 +265,32 @@ def _migrate_sequence(
         sequences = _ensure_confirm_after(sequences, "close")
         sequences = _ensure_shutdown_wait(sequences)
     sequences = _flatten_sequence_waits(sequences, recovery_raw)
+    sequences = _migrate_launch_icon_to_process(sequences)
+    return sequences
+
+
+def _migrate_launch_icon_to_process(
+    sequences: dict[str, list[dict[str, Any]]],
+) -> dict[str, list[dict[str, Any]]]:
+    """Replace desktop-icon double-click with an elevated process launch."""
+    steps = list(sequences.get("restart_app") or [])
+    if not steps:
+        return sequences
+    migrated: list[dict[str, Any]] = []
+    for step in steps:
+        item = dict(step)
+        if item.get("action") == "click" and item.get("point") == "launch_icon":
+            migrated.append(
+                {
+                    "action": "launch",
+                    "as_admin": True,
+                    "enabled": bool(item.get("enabled", True)),
+                }
+            )
+        else:
+            item.setdefault("enabled", True)
+            migrated.append(item)
+    sequences["restart_app"] = migrated
     return sequences
 
 

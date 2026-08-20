@@ -4,6 +4,18 @@ from pathlib import Path
 
 import src.app as app_mod
 from src.app import apply_window_state
+from src.config import load_config, save_config
+
+
+def _seeded_config(tmp_path: Path) -> Path:
+    dest = tmp_path / "config.yaml"
+    dest.write_text(Path("config.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+    exe = tmp_path / "line_app.exe"
+    exe.write_bytes(b"MZ")
+    cfg = load_config(dest)
+    cfg.recovery.launch_path = str(exe)
+    save_config(dest, cfg)
+    return dest
 
 
 class FakeWindow:
@@ -36,8 +48,7 @@ def test_apply_window_state_restores() -> None:
 
 
 def test_start_monitor_minimizes_dashboard(tmp_path: Path, monkeypatch) -> None:
-    dest = tmp_path / "config.yaml"
-    dest.write_text(Path("config.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+    dest = _seeded_config(tmp_path)
     dash = app_mod.Dashboard(config_path=dest)
     dash.root.withdraw()
     calls: list[tuple[object, str]] = []
@@ -67,8 +78,7 @@ def test_start_monitor_minimizes_dashboard(tmp_path: Path, monkeypatch) -> None:
 def test_start_monitor_skips_minimize_when_already_running(
     tmp_path: Path, monkeypatch
 ) -> None:
-    dest = tmp_path / "config.yaml"
-    dest.write_text(Path("config.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+    dest = _seeded_config(tmp_path)
     dash = app_mod.Dashboard(config_path=dest)
     dash.root.withdraw()
     dash._running = True
@@ -85,8 +95,7 @@ def test_start_monitor_skips_minimize_when_already_running(
 
 
 def test_start_monitor_does_not_reset_saved_calibration(tmp_path: Path, monkeypatch) -> None:
-    dest = tmp_path / "config.yaml"
-    dest.write_text(Path("config.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+    dest = _seeded_config(tmp_path)
     dash = app_mod.Dashboard(config_path=dest)
     dash.root.withdraw()
 
@@ -117,4 +126,31 @@ def test_start_monitor_does_not_reset_saved_calibration(tmp_path: Path, monkeypa
         assert reloaded.rois["table"].y == 43
     finally:
         dash._running = False
+        dash.root.destroy()
+
+
+def test_start_monitor_requires_launch_path(tmp_path: Path, monkeypatch) -> None:
+    dest = tmp_path / "config.yaml"
+    dest.write_text(Path("config.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+    warnings: list[str] = []
+
+    def fake_warn(title, message):
+        warnings.append(str(title))
+
+    class FakeThread:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def start(self) -> None:
+            pass
+
+    monkeypatch.setattr(app_mod.messagebox, "showwarning", fake_warn)
+    monkeypatch.setattr(app_mod.threading, "Thread", FakeThread)
+    dash = app_mod.Dashboard(config_path=dest)
+    dash.root.withdraw()
+    try:
+        dash.start_monitor()
+        assert dash._running is False
+        assert warnings == ["Launch path required"]
+    finally:
         dash.root.destroy()

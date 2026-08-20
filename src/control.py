@@ -2,11 +2,30 @@
 
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 from src.config import ControlConfig
+
+
+def shell_execute_runas(path: str, arguments: str = "") -> int:
+    """Start a file with the Windows 'runas' verb (Run as administrator)."""
+    import ctypes
+
+    return int(
+        ctypes.windll.shell32.ShellExecuteW(
+            None,
+            "runas",
+            path,
+            arguments or None,
+            None,
+            1,
+        )
+    )
+
 
 try:
     import pyautogui
@@ -59,3 +78,24 @@ class ControlEngine:
 
     def wait(self, sec: float) -> None:
         time.sleep(float(sec))
+
+    def launch_as_admin(self, path: str, arguments: str = "") -> ControlResult:
+        start = time.perf_counter()
+        resolved = os.path.expandvars(str(path or "").strip().strip('"'))
+        if not resolved:
+            return ControlResult(False, None, time.perf_counter() - start, error="launch path is empty")
+        target = Path(resolved)
+        if not target.is_file():
+            return ControlResult(
+                False,
+                None,
+                time.perf_counter() - start,
+                error=f"launch path not found: {resolved}",
+            )
+        try:
+            rc = shell_execute_runas(str(target), arguments)
+        except Exception as exc:
+            return ControlResult(False, None, time.perf_counter() - start, error=str(exc))
+        ok = int(rc) > 32
+        error = "" if ok else f"ShellExecute runas failed (code {rc})"
+        return ControlResult(ok, None, time.perf_counter() - start, error=error)

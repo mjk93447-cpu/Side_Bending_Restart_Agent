@@ -19,7 +19,12 @@ from src.monitor import Monitor, MonitorTick
 from src.ocr_engine import OCREngine
 from src.paths import APP_VERSION, app_root, logs_dir
 from src.process_editor import ProcessEditorPanel
-from src.recovery import build_restart_actions, run_sequence
+from src.recovery import (
+    build_restart_actions,
+    has_enabled_launch_step,
+    resolve_launch_path,
+    run_sequence,
+)
 
 
 def apply_window_state(window: tk.Misc, state: str) -> str:
@@ -118,6 +123,14 @@ class Dashboard:
             self._apply_process_config(self._process_editor.save())
         else:
             self._apply_process_config(load_config(self.config_path))
+        if has_enabled_launch_step(self.config) and not resolve_launch_path(self.config):
+            messagebox.showwarning(
+                "Launch path required",
+                "Process Editor에서 재실행할 .exe 또는 바로가기를 지정하십시오.\n"
+                "아이콘 더블클릭 대신 관리자 권한(runas)으로 실행합니다.",
+            )
+            if not self._running:
+                return
         if self._running:
             return
         self._running = True
@@ -147,6 +160,9 @@ class Dashboard:
 
     def dry_run_recovery(self) -> None:
         if hasattr(self, "_process_editor"):
+            self.config.recovery.launch_path = str(
+                self._process_editor._launch_path.get() or ""
+            )
             self.config.recovery.sequences["restart_app"] = [
                 dict(step) for step in self._process_editor._steps
             ]

@@ -3,11 +3,30 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+import os
+from typing import Any, Optional
 
 from src.config import AppConfig
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_launch_path(config: AppConfig, step: Optional[dict[str, Any]] = None) -> str:
+    raw = ""
+    if step is not None:
+        raw = str(step.get("path") or "").strip().strip('"')
+    if not raw:
+        raw = str(getattr(config.recovery, "launch_path", "") or "").strip().strip('"')
+    return os.path.expandvars(raw)
+
+
+def has_enabled_launch_step(config: AppConfig, sequence_name: str = "restart_app") -> bool:
+    for step in config.recovery.sequences.get(sequence_name) or []:
+        if step.get("enabled", True) is False:
+            continue
+        if step.get("action") == "launch":
+            return True
+    return False
 
 
 def build_restart_actions(
@@ -34,6 +53,9 @@ def build_restart_actions(
             action["x"] = point.x
             action["y"] = point.y
             action["click"] = point.click
+        if action.get("action") == "launch":
+            action["path"] = resolve_launch_path(config, action)
+            action["as_admin"] = bool(action.get("as_admin", True))
         actions.append(action)
     return actions
 
@@ -60,6 +82,13 @@ def run_sequence(
                 control.double_click_at(x, y)
             else:
                 control.click_at(x, y)
+        elif kind == "launch":
+            path = action.get("path") or resolve_launch_path(config, action)
+            result = control.launch_as_admin(path, action.get("arguments") or "")
+            if result is not None and getattr(result, "success", True) is False:
+                error = getattr(result, "error", "") or "launch as administrator failed"
+                raise RuntimeError(error)
+            entry["path"] = path
         else:
             raise ValueError(f"Unsupported recovery action: {kind!r}")
         log.append(entry)

@@ -11,6 +11,7 @@ from src.process_editor import (
     insert_step,
     move_step,
     new_click_step,
+    new_launch_step,
     new_wait_step,
     set_step_enabled,
     set_wait_seconds,
@@ -59,6 +60,7 @@ def test_set_wait_and_disable() -> None:
 def test_describe_click_and_wait() -> None:
     assert "stop" in describe_step(new_click_step("stop")).lower()
     assert "5" in describe_step(new_wait_step(5))
+    assert "admin" in describe_step(new_launch_step(r"C:\app.exe")).lower()
 
 
 def test_save_process_steps_does_not_clobber_calibration(tmp_path: Path) -> None:

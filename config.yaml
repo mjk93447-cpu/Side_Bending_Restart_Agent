@@ -1,4 +1,4 @@
-version: "0.4.2"
+version: "0.5.0"
 
 monitor:
   interval_sec: 2.0
@@ -48,6 +48,7 @@ recovery:
   startup_wait_sec: 10
   stop_confirm_wait_sec: 1
   editor_managed: true
+  launch_path: ""
   sequences:
     restart_app:
       - action: click
@@ -74,8 +75,8 @@ recovery:
       - action: wait
         sec: 5
         enabled: true
-      - action: click
-        point: launch_icon
+      - action: launch
+        as_admin: true
         enabled: true
       - action: wait
         sec: 10

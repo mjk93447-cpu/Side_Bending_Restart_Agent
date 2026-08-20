@@ -124,8 +124,10 @@ rules: []
     cfg = load_config(dest)
     assert "confirm_yes" in cfg.points
     clicks = [a.get("point") for a in build_restart_actions(cfg) if a["action"] == "click"]
-    assert clicks == ["stop", "confirm_yes", "close", "confirm_yes", "launch_icon", "start"]
-    waits = [a["sec"] for a in build_restart_actions(cfg) if a["action"] == "wait"]
+    assert clicks == ["stop", "confirm_yes", "close", "confirm_yes", "start"]
+    actions = build_restart_actions(cfg)
+    assert any(a["action"] == "launch" and a.get("as_admin") for a in actions)
+    waits = [a["sec"] for a in actions if a["action"] == "wait"]
     assert waits[0] == 1
     assert waits[2] == 1
     assert waits[-2] == 5
@@ -172,7 +174,8 @@ rules: []
     assert True not in cfg.points
     assert cfg.points["confirm_yes"].x == 88
     clicks = [a.get("point") for a in build_restart_actions(cfg) if a["action"] == "click"]
-    assert clicks == ["stop", "confirm_yes", "close", "confirm_yes", "launch_icon", "start"]
+    assert clicks == ["stop", "confirm_yes", "close", "confirm_yes", "start"]
+    assert any(a["action"] == "launch" for a in build_restart_actions(cfg))
 
 
 def test_editor_managed_does_not_reinject_removed_yes(tmp_path: Path) -> None:
@@ -208,11 +211,12 @@ rules: []
 
     cfg = load_config(dest)
     clicks = [a.get("point") for a in build_restart_actions(cfg) if a["action"] == "click"]
-    assert clicks == ["stop", "close", "launch_icon", "start"]
+    assert clicks == ["stop", "close", "start"]
+    assert any(a["action"] == "launch" for a in build_restart_actions(cfg))
 
 
-def test_packaged_version_is_0_4_2() -> None:
+def test_packaged_version_is_0_5_0() -> None:
     text = Path("config.yaml").read_text(encoding="utf-8")
-    assert 'version: "0.4.2"' in text
-    assert APP_VERSION == "0.4.2"
-    assert Path("VERSION").read_text(encoding="utf-8").strip() == "0.4.2"
+    assert 'version: "0.5.0"' in text
+    assert APP_VERSION == "0.5.0"
+    assert Path("VERSION").read_text(encoding="utf-8").strip() == "0.5.0"

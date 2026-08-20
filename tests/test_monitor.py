@@ -32,6 +32,12 @@ class FakeControl:
     def wait(self, sec):
         self.calls.append(("wait", sec))
 
+    def launch_as_admin(self, path, arguments=""):
+        self.calls.append(("launch_admin", path, arguments))
+        from src.control import ControlResult
+
+        return ControlResult(True, None, 0.0)
+
 
 def _image() -> np.ndarray:
     return np.zeros((1080, 1920, 3), dtype=np.uint8)
@@ -61,7 +67,7 @@ def test_confirm_scans_required_before_trigger() -> None:
     assert second.triggered is True
     assert second.sequence == "restart_app"
     assert ("click", cfg.points["stop"].x, cfg.points["stop"].y) in control.calls
-    assert ("double", cfg.points["launch_icon"].x, cfg.points["launch_icon"].y) in control.calls
+    assert any(c[0] == "launch_admin" for c in control.calls)
 
 
 def test_reset_confirm_when_count_drops() -> None:
